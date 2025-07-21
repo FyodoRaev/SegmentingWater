@@ -57,6 +57,12 @@ def main():
     Основная функция для запуска тестирования.
     """
     print(f"Используемое устройство: {DEVICE}")
+    # НОВОЕ: Задаем имя папки для сохранения результатов
+    output_dir = "output"
+
+    # НОВОЕ: Создаем эту папку, если она не существует.
+    # exist_ok=True предотвращает ошибку, если папка уже есть.
+    os.makedirs(output_dir, exist_ok=True)
 
     if not os.path.exists(MODEL_WEIGHTS_PATH):
         print(f"ОШИБКА: Файл с моделью не найден по пути: {MODEL_WEIGHTS_PATH}")
@@ -104,7 +110,19 @@ def main():
 
         plt.tight_layout()
         plt.show()
+        # НОВОЕ: Формируем имя выходного файла на основе имени входного
 
+
+        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        save_path = os.path.join(output_dir, f"{base_name}_result.png")
+
+        # НОВОЕ: Сохраняем фигуру в файл вместо отображения на экране
+        plt.savefig(save_path)
+        print(f"Результат сохранен в: {save_path}")
+
+        # ИЗМЕНЕНО: Вместо plt.show() используем plt.close() для освобождения памяти.
+        # plt.show() # Эта строка больше не нужна, если вы не хотите видеть всплывающее окно
+        plt.close()  # Важно закрывать фигуру в цикле, чтобы не потреблять лишнюю память
 
 if __name__ == '__main__':
     main()

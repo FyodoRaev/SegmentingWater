@@ -362,60 +362,86 @@ def evaluate_on_val_set():
 
 import time
 
-def train_model(num_epochs, patience=3, warmup_steps=100, max_grad_norm=0.8, save_path='best_model.pth'):
-    early_stopping = EarlyStopping(patience=patience, verbose=True, path='best_model' + str(datetime.datetime.now())+ '.pth')
 
-    # Learning Rate Scheduler (Warmup 단계 적용)
-    total_steps = len(train_loader) * num_epochs  # 총 학습 스텝 수 계산
+def train_model(num_epochs, patience=3, warmup_steps=100, max_grad_norm=0.8, save_every_n_epochs=10):
+    # --- НАЧАЛО ИЗМЕНЕНИЙ ---
+    # Мы будем использовать OUTPUT_DIR, который был определен ранее в коде.
+    # Убедимся, что он существует.
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # EarlyStopping по-прежнему полезен для нахождения лучшей модели по val_loss
+    best_model_path = os.path.join(OUTPUT_DIR, 'best_model_by_val_loss.pth')
+    early_stopping = EarlyStopping(patience=patience, verbose=True, path=best_model_path)
+    # --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
+    total_steps = len(train_loader) * num_epochs
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
         lr_lambda=lambda step: min(1.0, step / warmup_steps) if step < warmup_steps else 1.0
     )
 
     for epoch in range(num_epochs):
-        model.train()  # 모델을 학습 모드로 설정
+        model.train()
         train_losses, train_metrics = [], []
 
-        # 배치별로 학습 진행
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch+1}")):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch + 1}")):
             losses, metrics = train_on_batch(batch)
             train_losses.extend(losses)
             train_metrics.extend(metrics)
-
-            # 그래디언트 클리핑 적용
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
-            # 학습률 스케줄러 스텝 업데이트 (Warmup 단계)
             scheduler.step()
 
         avg_train_loss = np.mean(train_losses)
         avg_train_metrics = np.mean(train_metrics, axis=0)
         train_accuracy, train_precision, train_recall, train_f1, train_iou, train_dice, train_fp, train_fn, train_tp, train_tn = avg_train_metrics
 
-        # 검증 성능 평가
         avg_val_loss, avg_val_metrics = evaluate_on_val_set()
         val_accuracy, val_precision, val_recall, val_f1, val_iou, val_dice, val_fp, val_fn, val_tp, val_tn = avg_val_metrics
 
-        # 훈련 및 검증 성능 출력
-        print(f"Epoch {epoch+1}/{num_epochs}")
-        print(f"Train Loss (IoU): {avg_train_loss:.4f} | Train Accuracy: {train_accuracy:.4f} | Train Precision: {train_precision:.4f} | Train Recall: {train_recall:.4f} | Train F1: {train_f1:.4f} | Train IoU: {train_iou:.4f} | Train Dice: {train_dice:.4f}")
-        print(f"Train FP: {train_fp}, FN: {train_fn}, TP: {train_tp}, TN: {train_tn}")
+        print(f"\n--- Epoch {epoch + 1}/{num_epochs} ---")
+        print(
+            f"Train Loss (IoU): {avg_train_loss:.4f} | Train Accuracy: {train_accuracy:.4f} | Train IoU: {train_iou:.4f}")
+        print(f"Val Loss (IoU):   {avg_val_loss:.4f} | Val Accuracy:   {val_accuracy:.4f} | Val IoU:   {val_iou:.4f}")
 
-        print(f"Val Loss (IoU): {avg_val_loss:.4f} | Val Accuracy: {val_accuracy:.4f} | Val Precision: {val_precision:.4f} | Val Recall: {val_recall:.4f} | Val F1: {val_f1:.4f} | Val IoU: {val_iou:.4f} | Val Dice: {val_dice:.4f}")
-        print(f"Val FP: {val_fp}, FN: {val_fn}, TP: {val_tp}, TN: {val_tn}")
+        # --- НАЧАЛО ИЗМЕНЕНИЙ: Периодическое сохранение весов ---
+        # Проверяем, нужно ли сохранять модель в эту эпоху.
+        # (epoch + 1) потому что эпохи для пользователя считаются с 1, а range() с 0.
+        if (epoch + 1) % save_every_n_epochs == 0:
+            # Формируем путь для сохранения чекпоинта
+            checkpoint_path = os.path.join(OUTPUT_DIR, f"segformer_epoch_{epoch + 1}.pth")
+            # Сохраняем только веса (state_dict) - это лучшая практика
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f"--- Checkpoint saved at epoch {epoch + 1} to {checkpoint_path} ---")
+        # --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
-        # Early Stopping 체크
         early_stopping(avg_val_loss, model)
         if early_stopping.early_stop:
-            print("Early stopping")
+            print("Early stopping triggered.")
             break
 
 # 전체 실행 시간 측정
+# 전체 실행 시간 측정
 start_time = time.time()  # 시작 시간 기록
-train_model(num_epochs=200, patience=5, warmup_steps=80, max_grad_norm=0.75, save_path=''
-                                                                                       ''
-                                                                                       'best_model' + str(datetime.datetime.now())+ '.pth')
+
+# Вызываем обучение с новым параметром
+train_model(
+    num_epochs=200,
+    patience=10,  # Увеличил терпение, чтобы early stopping не сработал слишком рано
+    warmup_steps=80,
+    max_grad_norm=0.75,
+    save_every_n_epochs=10  # <-- Вот он, наш новый параметр!
+)
+
 end_time = time.time()  # 종료 시간 기록
+print(f"Total training time: {(end_time - start_time) / 60:.2f} minutes")
+
+# --- Сохранение финальной модели ---
+# После окончания обучения (по количеству эпох или из-за EarlyStopping)
+# можно сохранить последнюю версию модели.
+final_model_path = os.path.join(OUTPUT_DIR, 'segformer_final_state_dict.pth')
+torch.save(model.state_dict(), final_model_path)
+print(f"\nFinal model's state_dict saved to {final_model_path}")
+print(f"Best model based on validation loss saved to {os.path.join(OUTPUT_DIR, 'best_model_by_val_loss.pth')}")
 
 
 def get_filename_without_extension(file_path):
