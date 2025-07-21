@@ -1,4 +1,4 @@
- Habaek - https://github.com/HanseonJoo/Habaek + одноименная статья
+ Habaek - https://github.com/HanseonJoo/Habaek + одноименная статья Habaek: https://arxiv.org/pdf/2410.15794
 
  В общем-то статья сопровождалась кодом, но достаточно нехорошим, так что я его почистил:
  * Разделил на блоки config, utils, dataset, model и train
