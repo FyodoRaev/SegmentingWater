@@ -7,3 +7,6 @@
  * После трейна пытаемся сохранить весь объект модели целиком с помощью pickle (torch.save). Это не только веса, но и вся архитектура, код и т.д. Это менее надежно и может ломаться при изменении кода. Оно хранится под именами "nvidia_best_all.pth"
 
  В файлике test.py можно позапускать модель c "nvidia_best_all.pth", в inference.py можно попробовать веса разных эпох "segformer_epoch_x.pth"
+
+--------
+Некоторые веса лежат здесь https://drive.google.com/drive/folders/1-AZmNp-71CXJFN9HpeUS8P5NtNT-kiyu?usp=sharing
